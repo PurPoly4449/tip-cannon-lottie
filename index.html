@@ -46,7 +46,6 @@
     .tip-button__preview {
       object-fit: contain;
       visibility: visible;
-      transition: transform 180ms ease;
     }
 
     .tip-button__animation {
@@ -57,11 +56,6 @@
 
     .tip-button__animation svg {
       overflow: visible;
-    }
-
-    .tip-button:hover .tip-button__preview,
-    .tip-button:focus-visible .tip-button__preview {
-      transform: scale(1.04);
     }
 
     .tip-button.is-animated .tip-button__preview {
@@ -95,6 +89,7 @@
     let rafId = null;
     let isLoaded = false;
     let isHovering = false;
+    let readyFallbackId = null;
 
     function showAnimation() {
       button.classList.add("is-animated");
@@ -218,6 +213,17 @@
       animateTo(START_FRAME);
     }
 
+    function markReady() {
+      if (isLoaded || !animation) return;
+
+      isLoaded = true;
+      draw(START_FRAME);
+
+      if (isHovering) {
+        playForward();
+      }
+    }
+
     button.addEventListener("pointerenter", playForward);
     button.addEventListener("pointerleave", playBackward);
     button.addEventListener("focus", playForward);
@@ -242,20 +248,20 @@
           }
         });
 
-        animation.addEventListener("DOMLoaded", () => {
-          isLoaded = true;
-          draw(START_FRAME);
+        animation.addEventListener("DOMLoaded", markReady);
+        animation.addEventListener("data_ready", markReady);
+        animation.addEventListener("loaded_images", markReady);
 
-          if (isHovering) {
-            playForward();
-          }
-        });
+        readyFallbackId = window.setTimeout(markReady, 350);
 
         animation.addEventListener("data_failed", () => {
           console.error("Lottie data failed");
           showPreview();
         });
       } catch (error) {
+        if (readyFallbackId) {
+          window.clearTimeout(readyFallbackId);
+        }
         console.error("Tip Cannon animation error:", error);
         showPreview();
       }
