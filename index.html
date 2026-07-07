@@ -46,6 +46,7 @@
     .tip-button__preview {
       object-fit: contain;
       visibility: visible;
+      transition: transform 180ms ease;
     }
 
     .tip-button__animation {
@@ -56,6 +57,11 @@
 
     .tip-button__animation svg {
       overflow: visible;
+    }
+
+    .tip-button:hover .tip-button__preview,
+    .tip-button:focus-visible .tip-button__preview {
+      transform: scale(1.04);
     }
 
     .tip-button.is-animated .tip-button__preview {
@@ -69,12 +75,11 @@
 </head>
 <body>
   <button class="tip-button" type="button" aria-label="Tip Cannon">
-    <img class="tip-button__preview" src="./Png.png?v=20260706-10" alt="" draggable="false">
+    <img class="tip-button__preview" src="./Png.png?v=20260707-2" alt="" draggable="false">
     <div class="tip-button__animation" aria-hidden="true"></div>
   </button>
 
-  <script src="./tipcannon-json-data.js?v=20260706-10"></script>
-  <script src="https://cdn.jsdelivr.net/npm/lottie-web@5.12.2/build/player/lottie.min.js"></script>
+  <script src="./tipcannon-json-data.js?v=20260707-2"></script>
   <script>
     const button = document.querySelector(".tip-button");
     const container = document.querySelector(".tip-button__animation");
@@ -83,6 +88,7 @@
     const HOLD_FRAME = 60;
     const SPEED = 1.25;
 
+    let animation = null;
     let currentFrame = START_FRAME;
     let targetFrame = START_FRAME;
     let lastTime = null;
@@ -98,19 +104,57 @@
       button.classList.remove("is-animated");
     }
 
-    const animation = lottie.loadAnimation({
-      container,
-      renderer: "svg",
-      loop: false,
-      autoplay: false,
-      animationData: window.TIP_CANNON_JSON_DATA,
-      rendererSettings: {
-        preserveAspectRatio: "xMidYMid meet",
-        progressiveLoad: false
+    function loadScript(src) {
+      return new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = src;
+        script.async = true;
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.appendChild(script);
+      });
+    }
+
+    async function loadLottiePlayer() {
+      if (window.lottie) return window.lottie;
+
+      const sources = [
+        "https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.12.2/lottie.min.js",
+        "https://cdn.jsdelivr.net/npm/lottie-web@5.12.2/build/player/lottie.min.js",
+        "https://unpkg.com/lottie-web@5.12.2/build/player/lottie.min.js"
+      ];
+
+      for (const src of sources) {
+        try {
+          await loadScript(src);
+          if (window.lottie) return window.lottie;
+        } catch (error) {
+          console.warn("Не загрузился Lottie-плеер:", src, error);
+        }
       }
-    });
+
+      throw new Error("Lottie-плеер не загрузился ни с одного CDN.");
+    }
+
+    async function loadAnimationData() {
+      if (window.TIP_CANNON_JSON_DATA) {
+        return window.TIP_CANNON_JSON_DATA;
+      }
+
+      const response = await fetch("./TipCannon-site.json?v=20260707-2", {
+        cache: "no-store"
+      });
+
+      if (!response.ok) {
+        throw new Error("Не найден TipCannon-site.json");
+      }
+
+      return response.json();
+    }
 
     function draw(frame) {
+      if (!animation) return;
+
       currentFrame = Math.max(START_FRAME, Math.min(HOLD_FRAME, frame));
       animation.goToAndStop(currentFrame, true);
     }
@@ -179,14 +223,45 @@
     button.addEventListener("focus", playForward);
     button.addEventListener("blur", playBackward);
 
-    animation.addEventListener("DOMLoaded", () => {
-      isLoaded = true;
-      draw(START_FRAME);
+    async function init() {
+      try {
+        const [lottiePlayer, animationData] = await Promise.all([
+          loadLottiePlayer(),
+          loadAnimationData()
+        ]);
 
-      if (isHovering) {
-        playForward();
+        animation = lottiePlayer.loadAnimation({
+          container,
+          renderer: "svg",
+          loop: false,
+          autoplay: false,
+          animationData,
+          rendererSettings: {
+            preserveAspectRatio: "xMidYMid meet",
+            progressiveLoad: false
+          }
+        });
+
+        animation.addEventListener("DOMLoaded", () => {
+          isLoaded = true;
+          draw(START_FRAME);
+
+          if (isHovering) {
+            playForward();
+          }
+        });
+
+        animation.addEventListener("data_failed", () => {
+          console.error("Lottie data failed");
+          showPreview();
+        });
+      } catch (error) {
+        console.error("Tip Cannon animation error:", error);
+        showPreview();
       }
-    });
+    }
+
+    init();
   </script>
 </body>
 </html>
