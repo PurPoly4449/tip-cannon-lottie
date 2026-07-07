@@ -51,11 +51,6 @@
     .tip-button__animation {
       visibility: hidden;
       pointer-events: none;
-      overflow: visible;
-    }
-
-    .tip-button__animation svg {
-      overflow: visible;
     }
 
     .tip-button.is-animated .tip-button__preview {
@@ -69,27 +64,34 @@
 </head>
 <body>
   <button class="tip-button" type="button" aria-label="Tip Cannon">
-    <img class="tip-button__preview" src="./Png.png?v=20260707-2" alt="" draggable="false">
-    <div class="tip-button__animation" aria-hidden="true"></div>
+    <img class="tip-button__preview" src="./Png.png?v=20260707-6" alt="" draggable="false">
+    <canvas class="tip-button__animation" width="960" height="960" aria-hidden="true"></canvas>
   </button>
 
-  <script src="./tipcannon-json-data.js?v=20260707-2"></script>
-  <script>
+  <script src="./tipcannon-data.js?v=20260707-6"></script>
+  <script type="module">
+    import { DotLottie } from "https://cdn.jsdelivr.net/npm/@lottiefiles/dotlottie-web/+esm";
+
     const button = document.querySelector(".tip-button");
-    const container = document.querySelector(".tip-button__animation");
+    const canvas = document.querySelector(".tip-button__animation");
+
+    const animationSource = location.protocol === "file:"
+      ? window.TIP_CANNON_LOTTIE_DATA
+      : "./TipCannon.lottie?v=20260707-6";
 
     const START_FRAME = 0;
     const HOLD_FRAME = 60;
-    const SPEED = 1.25;
+    const ANIMATION_SPEED = 1.35;
 
-    let animation = null;
-    let currentFrame = START_FRAME;
-    let targetFrame = START_FRAME;
-    let lastTime = null;
-    let rafId = null;
     let isLoaded = false;
     let isHovering = false;
-    let readyFallbackId = null;
+
+    const animation = new DotLottie({
+      canvas,
+      src: animationSource,
+      autoplay: false,
+      loop: false
+    });
 
     function showAnimation() {
       button.classList.add("is-animated");
@@ -99,129 +101,39 @@
       button.classList.remove("is-animated");
     }
 
-    function loadScript(src) {
-      return new Promise((resolve, reject) => {
-        const script = document.createElement("script");
-        script.src = src;
-        script.async = true;
-        script.onload = resolve;
-        script.onerror = reject;
-        document.head.appendChild(script);
-      });
-    }
-
-    async function loadLottiePlayer() {
-      if (window.lottie) return window.lottie;
-
-      const sources = [
-        "https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.12.2/lottie.min.js",
-        "https://cdn.jsdelivr.net/npm/lottie-web@5.12.2/build/player/lottie.min.js",
-        "https://unpkg.com/lottie-web@5.12.2/build/player/lottie.min.js"
-      ];
-
-      for (const src of sources) {
-        try {
-          await loadScript(src);
-          if (window.lottie) return window.lottie;
-        } catch (error) {
-          console.warn("Не загрузился Lottie-плеер:", src, error);
-        }
-      }
-
-      throw new Error("Lottie-плеер не загрузился ни с одного CDN.");
-    }
-
-    async function loadAnimationData() {
-      if (window.TIP_CANNON_JSON_DATA) {
-        return window.TIP_CANNON_JSON_DATA;
-      }
-
-      const response = await fetch("./TipCannon-site.json?v=20260707-2", {
-        cache: "no-store"
-      });
-
-      if (!response.ok) {
-        throw new Error("Не найден TipCannon-site.json");
-      }
-
-      return response.json();
-    }
-
-    function draw(frame) {
-      if (!animation) return;
-
-      currentFrame = Math.max(START_FRAME, Math.min(HOLD_FRAME, frame));
-      animation.goToAndStop(currentFrame, true);
-    }
-
-    function stopTween() {
-      if (rafId) {
-        cancelAnimationFrame(rafId);
-        rafId = null;
-      }
-      lastTime = null;
-    }
-
-    function animateTo(frame) {
-      targetFrame = frame;
-      stopTween();
-
-      const tick = (time) => {
-        if (lastTime === null) lastTime = time;
-
-        const delta = ((time - lastTime) / 1000) * 60 * SPEED;
-        lastTime = time;
-
-        if (currentFrame < targetFrame) {
-          draw(Math.min(targetFrame, currentFrame + delta));
-        } else if (currentFrame > targetFrame) {
-          draw(Math.max(targetFrame, currentFrame - delta));
-        }
-
-        if (Math.abs(currentFrame - targetFrame) > 0.01) {
-          rafId = requestAnimationFrame(tick);
-        } else {
-          draw(targetFrame);
-          rafId = null;
-          lastTime = null;
-
-          if (!isHovering && targetFrame === START_FRAME) {
-            showPreview();
-          }
-        }
-      };
-
-      rafId = requestAnimationFrame(tick);
-    }
-
     function playForward() {
       isHovering = true;
+
       if (!isLoaded) return;
 
       showAnimation();
-      animateTo(HOLD_FRAME);
+      animation.setSegment(START_FRAME, HOLD_FRAME);
+
+      if (
+        animation.currentFrame < START_FRAME ||
+        animation.currentFrame > HOLD_FRAME
+      ) {
+        animation.setFrame(START_FRAME);
+      }
+
+      animation.setSpeed(ANIMATION_SPEED);
+      animation.setMode("forward");
+      animation.play();
     }
 
     function playBackward() {
       isHovering = false;
+
       if (!isLoaded) {
         showPreview();
         return;
       }
 
       showAnimation();
-      animateTo(START_FRAME);
-    }
-
-    function markReady() {
-      if (isLoaded || !animation) return;
-
-      isLoaded = true;
-      draw(START_FRAME);
-
-      if (isHovering) {
-        playForward();
-      }
+      animation.setSegment(START_FRAME, HOLD_FRAME);
+      animation.setSpeed(ANIMATION_SPEED);
+      animation.setMode("reverse");
+      animation.play();
     }
 
     button.addEventListener("pointerenter", playForward);
@@ -229,45 +141,32 @@
     button.addEventListener("focus", playForward);
     button.addEventListener("blur", playBackward);
 
-    async function init() {
-      try {
-        const [lottiePlayer, animationData] = await Promise.all([
-          loadLottiePlayer(),
-          loadAnimationData()
-        ]);
+    animation.addEventListener("load", () => {
+      isLoaded = true;
+      animation.setFrame(START_FRAME);
 
-        animation = lottiePlayer.loadAnimation({
-          container,
-          renderer: "svg",
-          loop: false,
-          autoplay: false,
-          animationData,
-          rendererSettings: {
-            preserveAspectRatio: "xMidYMid meet",
-            progressiveLoad: false
-          }
-        });
+      if (isHovering) {
+        playForward();
+      }
+    });
 
-        animation.addEventListener("DOMLoaded", markReady);
-        animation.addEventListener("data_ready", markReady);
-        animation.addEventListener("loaded_images", markReady);
+    animation.addEventListener("complete", () => {
+      animation.pause();
 
-        readyFallbackId = window.setTimeout(markReady, 350);
-
-        animation.addEventListener("data_failed", () => {
-          console.error("Lottie data failed");
-          showPreview();
-        });
-      } catch (error) {
-        if (readyFallbackId) {
-          window.clearTimeout(readyFallbackId);
-        }
-        console.error("Tip Cannon animation error:", error);
+      if (isHovering) {
+        animation.setFrame(HOLD_FRAME);
+        showAnimation();
+      } else {
+        animation.setSegment(START_FRAME, HOLD_FRAME);
+        animation.setFrame(START_FRAME);
         showPreview();
       }
-    }
+    });
 
-    init();
+    animation.addEventListener("loadError", () => {
+      isLoaded = false;
+      showPreview();
+    });
   </script>
 </body>
 </html>
