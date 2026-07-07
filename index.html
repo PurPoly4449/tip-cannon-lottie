@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tip Cannon Hover Animation</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+      display: grid;
+      place-items: center;
+      background: #f3f3f3;
+      font-family: Arial, sans-serif;
+    }
+
+    .tip-button {
+      position: relative;
+      width: 120px;
+      height: 120px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .tip-button:focus-visible {
+      outline: 3px solid #6d4aff;
+      outline-offset: 4px;
+    }
+
+    .tip-button__preview,
+    .tip-button__animation {
+      position: absolute;
+      inset: 0;
+      width: 120px;
+      height: 120px;
+      display: block;
+    }
+
+    .tip-button__preview {
+      object-fit: contain;
+      visibility: visible;
+    }
+
+    .tip-button__animation {
+      visibility: hidden;
+      pointer-events: none;
+      overflow: visible;
+    }
+
+    .tip-button__animation svg {
+      overflow: visible;
+    }
+
+    .tip-button.is-animated .tip-button__preview {
+      visibility: hidden;
+    }
+
+    .tip-button.is-animated .tip-button__animation {
+      visibility: visible;
+    }
+  </style>
+</head>
+<body>
+  <button class="tip-button" type="button" aria-label="Tip Cannon">
+    <img class="tip-button__preview" src="./Png.png?v=20260706-10" alt="" draggable="false">
+    <div class="tip-button__animation" aria-hidden="true"></div>
+  </button>
+
+  <script src="./tipcannon-json-data.js?v=20260706-10"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lottie-web@5.12.2/build/player/lottie.min.js"></script>
+  <script>
+    const button = document.querySelector(".tip-button");
+    const container = document.querySelector(".tip-button__animation");
+
+    const START_FRAME = 0;
+    const HOLD_FRAME = 60;
+    const SPEED = 1.25;
+
+    let currentFrame = START_FRAME;
+    let targetFrame = START_FRAME;
+    let lastTime = null;
+    let rafId = null;
+    let isLoaded = false;
+    let isHovering = false;
+
+    function showAnimation() {
+      button.classList.add("is-animated");
+    }
+
+    function showPreview() {
+      button.classList.remove("is-animated");
+    }
+
+    const animation = lottie.loadAnimation({
+      container,
+      renderer: "svg",
+      loop: false,
+      autoplay: false,
+      animationData: window.TIP_CANNON_JSON_DATA,
+      rendererSettings: {
+        preserveAspectRatio: "xMidYMid meet",
+        progressiveLoad: false
+      }
+    });
+
+    function draw(frame) {
+      currentFrame = Math.max(START_FRAME, Math.min(HOLD_FRAME, frame));
+      animation.goToAndStop(currentFrame, true);
+    }
+
+    function stopTween() {
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+      lastTime = null;
+    }
+
+    function animateTo(frame) {
+      targetFrame = frame;
+      stopTween();
+
+      const tick = (time) => {
+        if (lastTime === null) lastTime = time;
+
+        const delta = ((time - lastTime) / 1000) * 60 * SPEED;
+        lastTime = time;
+
+        if (currentFrame < targetFrame) {
+          draw(Math.min(targetFrame, currentFrame + delta));
+        } else if (currentFrame > targetFrame) {
+          draw(Math.max(targetFrame, currentFrame - delta));
+        }
+
+        if (Math.abs(currentFrame - targetFrame) > 0.01) {
+          rafId = requestAnimationFrame(tick);
+        } else {
+          draw(targetFrame);
+          rafId = null;
+          lastTime = null;
+
+          if (!isHovering && targetFrame === START_FRAME) {
+            showPreview();
+          }
+        }
+      };
+
+      rafId = requestAnimationFrame(tick);
+    }
+
+    function playForward() {
+      isHovering = true;
+      if (!isLoaded) return;
+
+      showAnimation();
+      animateTo(HOLD_FRAME);
+    }
+
+    function playBackward() {
+      isHovering = false;
+      if (!isLoaded) {
+        showPreview();
+        return;
+      }
+
+      showAnimation();
+      animateTo(START_FRAME);
+    }
+
+    button.addEventListener("pointerenter", playForward);
+    button.addEventListener("pointerleave", playBackward);
+    button.addEventListener("focus", playForward);
+    button.addEventListener("blur", playBackward);
+
+    animation.addEventListener("DOMLoaded", () => {
+      isLoaded = true;
+      draw(START_FRAME);
+
+      if (isHovering) {
+        playForward();
+      }
+    });
+  </script>
+</body>
+</html>
